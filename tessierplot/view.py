@@ -7,14 +7,9 @@ import os
 from itertools import chain
 import numpy as np
 import re
+import win32api
 from IPython.display import VimeoVideo
 from IPython.display import display, HTML, display_html
-
-if os.name == 'nt':
-    import win32api
-
-import imp
-imp.reload(ts)
 
 plotstyle = 'normal'
 
@@ -22,21 +17,17 @@ plotstyle = 'normal'
 def getthumbcachepath(file):
     oneupdir = os.path.abspath(os.path.join(os.path.dirname(file),os.pardir))
     datedir = os.path.split(oneupdir)[1] #directory name should be datedir, if not 
-        
+    if re.match('[0-9]{8}',datedir):
+        preid= datedir
+    else:
+        preid = ''
+    
     #relative to project/working directory
-    cachepath = os.path.normpath(os.path.join(os.getcwd(),'thumbnails', datedir + '_'+os.path.split(os.path.dirname(file))[1] + '_thumb.png'))
-
+    cachepath = os.path.normpath(os.path.join(os.getcwd(),'thumbnails', preid + '_'+os.path.splitext(os.path.split(file)[1])[0] + '_thumb.png'))
     return cachepath
     
 def getthumbdatapath(file):
-    f,ext = os.path.splitext(file)
-
-    # make sure we have stripped of all wrapping file extesions due to e.g. zipping
-    while not ext=='':
-        f,ext = os.path.splitext(f)
-
-    thumbdatapath = f + '_thumb.png'
-
+    thumbdatapath = os.path.splitext(file)[0] + '_thumb.png'
     return thumbdatapath
 
 class tessierView(object):
@@ -61,11 +52,10 @@ class tessierView(object):
     def on(self):   
         print('You are now watching through the glasses of ideology')
         display(VimeoVideo('106036638'))
-    
-    @classmethod
-    def getsetfilepath(cls,filename):
+          
+    def getsetfilepath(self,filename):
         file_Path, file_Extension = os.path.splitext(filename)
-        if file_Extension ==  '.gz':
+        if   file_Extension ==  '.gz':
             file_Path = os.path.splitext(file_Path)[0]
         elif file_Extension != '.dat':
             print('Wrong file extension')
@@ -115,7 +105,7 @@ class tessierView(object):
             thumbfile = None #if fail no thumbfile was created
             print('Error {:s} for file {:s}'.format(str(e),filename))
             pass
-        
+
         return thumbfile
 
 
@@ -151,20 +141,19 @@ class tessierView(object):
                 # check if filterstring can be found in the path
                 isinfilterstring = filterstring.lower() in fullpath.lower()
                 
-                dir,basename =  os.path.split(fullpath)
+                fullname,fullext = os.path.split(fullpath)
+                fullname = win32api.GetShortPathName(fullname)    
+                fullpath = fullname + '/' + fullext
 
-                #extract the directory which is the date of measurement
-                datedir = os.path.basename(os.path.normpath(dir+'/../'))
-                
-                if os.name == 'nt': # avoid problems with very long path names in windows
-                    dir = win32api.GetShortPathName(dir)
-                    fullpath = dir + '/' + basename
+                dir,basename =  os.path.split(fullpath)
                 
                 measname,ext1 = os.path.splitext(basename)
                 #dirty, if filename ends e.g. in gz, also chops off the second extension
                 measname,ext2 = os.path.splitext(measname)
                 ext = ext2+ext1
                 
+                #extract the directory which is the date of measurement
+                datedir = os.path.basename(os.path.normpath(dir+'/../'))
 
                 #check if filterstring can be found in the set file (e.g. 'dac4: 1337.0')
                 if not isinfilterstring:
@@ -172,17 +161,16 @@ class tessierView(object):
                     if setfilepath: # only check for filterstring if set file exists
                         isinfilterstring = filterstring in open(setfilepath).read()
 
-                if isinfilterstring:    #liable for improvement
+                if isinfilterstring:   #liable for improvement
                     if self._showfilenames:
                         print(fullpath)
                     df = data.Data.load_header_only(fullpath)
                     if headercheck is None or df.coordkeys[-2] == headercheck:
                         thumbpath = self.makethumbnail(fullpath,**kwargs)
-
+                        
                         if thumbpath:
-                            thumbpath_html = thumbpath.replace('#','%23') # html doesn not like number signs in file paths
                             self._allthumbs.append({'datapath':fullpath,
-                                                 'thumbpath':thumbpath_html,
+                                                 'thumbpath':thumbpath,
                                                  'datedir':datedir, 
                                                  'measname':measname})
                             images += 1
