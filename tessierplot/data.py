@@ -3,6 +3,9 @@ import os
 import re
 import numpy as np
 from six.moves import xrange
+import json
+
+from . import view
 
 class parser(object):
     def __init__(self):
@@ -19,7 +22,7 @@ class dat_parser(parser):
         self._filebuffer = filebuffer
 
         super(dat_parser,self).__init__()
-
+    
     def parse(self):
         filebuffer = self._filebuffer
         if filebuffer == None:
@@ -28,8 +31,9 @@ class dat_parser(parser):
         else:
             f = filebuffer
             self._filebuffer = filebuffer
+        
         self._header,self._headerlength = self.parseheader()
-
+        
         self._data = pandas.read_csv(f,
                                  sep='\t', \
                                  comment='#',
@@ -39,8 +43,61 @@ class dat_parser(parser):
         
         return super(dat_parser,self).parse()
 
+    def parse_header(self):
+        return None
+    
     def is_valid(self):
         pass
+
+class qcodes_parser(dat_parser):
+    def __init__(self,filename=None,filebuffer=None):
+        super(qcodes_parser,self).__init__(filename=filename,filebuffer=filebuffer)
+
+    def parse(self):
+        return super(qcodes_parser,self).parse()
+
+    def is_valid(self):
+        pass
+
+    def parseheader(self):
+        #read in the .json file
+        json_file = ''.join((os.path.dirname(self._file),'/snapshot.json'))
+        filebuffer = open(json_file)
+        json_s=filebuffer.read()
+
+        #look for the part where the data file meta info is stored
+        json_data = json.loads(json_s)
+        headerdict = json_data['arrays']
+        header=[]
+        headerlength=0
+
+        for i,val in enumerate(headerdict):
+            if headerdict[val]['is_setpoint']:
+                line=[i,headerdict[val]['name'],'coordinate']
+                line_x = zip(['column','name','type'],line)
+                header.append(line_x)
+                headerlength=headerlength+1
+            else:
+                line=[i,headerdict[val]['name'],'value']
+                line_x = zip(['column','name','type'],line)
+                header.append(line_x)
+                headerlength=headerlength+1
+
+        header = [dict(x) for x in header]
+        
+        #set_trace()
+        return header,headerlength
+
+class qtlab_parser(dat_parser):
+    def __init__(self,filename=None,filebuffer=None):
+        super(qtlab_parser,self).__init__(filename=filename,filebuffer=filebuffer)
+
+    def parse(self):
+        return super(qtlab_parser,self).parse()
+
+    def is_valid(self):
+        pass
+
     def parseheader(self):
         filebuffer = self._filebuffer
         firstline = filebuffer.readline().decode()
@@ -118,28 +175,65 @@ class dat_parser(parser):
         
         return header,headerlength
 
-class gz_parser(dat_parser):
-    def __init__(self,filename,filebuffer=None):
-        self._file = filename
-        
-        import gzip
-        f = open(self._file,'rb')
-        if (f.read(2) == b'\x1f\x8b'):
-            f.seek(0)
-            gz = super(gz_parser,self).__init__(filename=filename,filebuffer=gzip.GzipFile(fileobj=f))
-            return gz
-        else:
-            raise Exception('Not a valid gzip file')
-        
-        
+def factory_gz_parser(cls):
+    # parent class of gz_parser depends on which kind of data file we have
+    class gz_parser(cls):
+        def __init__(self,filename,filebuffer=None):
+            self._file = filename
+            
+            import gzip
+            f = open(self._file,'rb')
+            if (f.read(2) == b'\x1f\x8b'):
+                f.seek(0)
+                gz = super(gz_parser,self).__init__(filename=filename,filebuffer=gzip.GzipFile(fileobj=f))
+                return gz
+            else:
+                raise Exception('Not a valid gzip file')
+    
+    return gz_parser
 
-class Data(pandas.DataFrame):
-    #supported filetypes
-    _FILETYPES =   {
-        '.dat': dat_parser,
-        '.dat.gz': gz_parser
+#class for supported filetypes, handles which parser class to call
+class filetype():
+    def __init__(self,filepath=None):
+        self._parser = None
+        self._filepath = filepath
+
+        #is there a snapshot.json file in the directory?
+        #if yes, we can assume it's a qcodes measurement file
+        json_file = ''.join((os.path.dirname(filepath),'/snapshot.json'))
+        set_file = view.tessierView.getsetfilepath(filepath)
+        
+        if os.path.exists(json_file):
+            self._datparser = qcodes_parser
+        elif os.path.exists(set_file):
+            self._datparser = qtlab_parser
+        else:
+            self._datparser = dat_parser
+        
+        self._FILETYPES = {
+            '.dat': self._datparser, # link the correct parser to .dat files
+            '.dat.gz': factory_gz_parser(self._datparser) # let the gz parser class have the right parent
         }
 
+    def get_parser(self):
+        ftype = self.get_filetype()
+        for f in self._FILETYPES.keys():
+            if f == ftype:
+                return self._FILETYPES[f]
+        else:
+            raise('No valid filetype')
+
+        return None
+
+    def get_filetype(self):
+        for ext in self._FILETYPES.keys():
+            if self._filepath.endswith(ext):
+                return ext
+                
+        return None
+
+class Data(pandas.DataFrame):
+    
     def __init__(self,*args,**kwargs):
         #args: filepath, sort
         #filepath = kwargs.pop('filepath',None)
@@ -154,14 +248,14 @@ class Data(pandas.DataFrame):
 
     @property
     def _constructor(self):
+        
         return Data
 
     @classmethod
     def determine_filetype(cls,filepath):
-        for ext in cls._FILETYPES.keys():
-            if filepath.endswith(ext):
-                return ext
-        return None
+        ftype = filetype(filepath=filepath)
+        
+        return ftype.get_filetype()
 
     @classmethod
     def load_header_only(cls,filepath):
@@ -170,16 +264,14 @@ class Data(pandas.DataFrame):
         header,headerlength = p.parseheader()
         df = Data()
         df._header = header
+
         return df
     
     @classmethod
     def determine_parser(cls,filepath):
-        ftype = cls.determine_filetype(filepath)
-
-        if ftype is not None:
-            parser = cls._FILETYPES[ftype]
-        else:
-            raise Exception('Unknown filetype')
+        ftype = filetype(filepath=filepath)
+        parser = ftype.get_parser()
+        
         return parser
     
     @classmethod
@@ -187,6 +279,7 @@ class Data(pandas.DataFrame):
         parser = cls.determine_parser(filepath)
         p = parser(filepath)
         p.parse()
+        
         return p._data,p._header
 
     @classmethod
@@ -195,15 +288,19 @@ class Data(pandas.DataFrame):
 
         newdataframe = Data(dat)
         newdataframe._header = header
+        
         return newdataframe
 
     @property
     def coordkeys(self):
         coord_keys = [i['name'] for i in self._header if i['type']=='coordinate' ]
+        
         return coord_keys
+    
     @property
     def valuekeys(self):
         value_keys = [i['name'] for i in self._header if i['type']=='value' ]
+        
         return value_keys
 
     @property
@@ -212,6 +309,7 @@ class Data(pandas.DataFrame):
             #sort the data from the last coordinate column backwards
             self._sorted_data = self.sort_values(by=self.coordkeys)
             self._sorted_data = self._sorted_data.dropna(how='any')
+        
         return self._sorted_data
 
     @property
@@ -219,7 +317,9 @@ class Data(pandas.DataFrame):
         #returns the amount of columns with more than one unique value in it
         dims = np.array(self.dims)
         nDim = len(dims[dims > 1])
+        
         return nDim
+    
     @property
     def dims(self):
         #returns an array with the amount of unique values of each coordinate column
@@ -231,6 +331,7 @@ class Data(pandas.DataFrame):
         for i in cols:
             col = getattr(self.sorted_data,i['name'])
             dims = np.hstack( ( dims ,len(col.unique())  ) )
+        
         return dims
 
     def make_filter_from_uniques_in_columns(self,columns):

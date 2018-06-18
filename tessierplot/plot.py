@@ -416,7 +416,7 @@ class plotR(object):
 					value_axis = -1,
 					style=['normal'],
 					uniques_col_str=[],
-					legend=True,
+					legend=False,
 					ax_destination=None,
 					subplots_args={'top':0.96, 'bottom':0.17, 'left':0.14, 'right':0.85,'hspace':0.0},
 					massage_func=None,
