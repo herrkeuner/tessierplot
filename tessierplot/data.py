@@ -5,8 +5,6 @@ import numpy as np
 from six.moves import xrange
 import json
 
-from . import view
-
 class parser(object):
     def __init__(self):
         self._header = None        
@@ -201,7 +199,7 @@ class filetype():
         #is there a snapshot.json file in the directory?
         #if yes, we can assume it's a qcodes measurement file
         json_file = ''.join((os.path.dirname(filepath),'/snapshot.json'))
-        set_file = view.tessierView.getsetfilepath(filepath)
+        set_file = self.getsetfilepath(filepath)
         
         if os.path.exists(json_file):
             self._datparser = qcodes_parser
@@ -225,6 +223,20 @@ class filetype():
 
         return None
 
+    @classmethod
+    def getsetfilepath(cls,filepath=''):
+        file_Path, file_Extension = os.path.splitext(filepath)
+        if file_Extension ==  '.gz':
+            file_Path = os.path.splitext(file_Path)[0]
+        elif file_Extension != '.dat':
+            print('Wrong file extension')
+        setfilepath = file_Path + '.set'
+        
+        if not os.path.exists(setfilepath):
+            setfilepath = None
+        
+        return setfilepath
+    
     def get_filetype(self):
         for ext in self._FILETYPES.keys():
             if self._filepath.endswith(ext):

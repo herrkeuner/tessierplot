@@ -62,19 +62,6 @@ class tessierView(object):
         print('You are now watching through the glasses of ideology')
         display(VimeoVideo('106036638'))
     
-    @classmethod
-    def getsetfilepath(cls,filename):
-        file_Path, file_Extension = os.path.splitext(filename)
-        if file_Extension ==  '.gz':
-            file_Path = os.path.splitext(file_Path)[0]
-        elif file_Extension != '.dat':
-            print('Wrong file extension')
-        setfilepath = file_Path + '.set'
-        
-        if not os.path.exists(setfilepath):
-            setfilepath = None
-        
-        return setfilepath
     def makethumbnail(self, filename,override=False,style=[]):
         #create a thumbnail and store it in the same directory and in the thumbnails dir for local file serving, override options for if file already exists
         thumbfile = getthumbcachepath(filename)
@@ -168,7 +155,7 @@ class tessierView(object):
 
                 #check if filterstring can be found in the set file (e.g. 'dac4: 1337.0')
                 if not isinfilterstring:
-                    setfilepath = self.getsetfilepath(fullpath)
+                    setfilepath = data.filetype.getsetfilepath(fullpath)
                     if setfilepath: # only check for filterstring if set file exists
                         isinfilterstring = filterstring in open(setfilepath).read()
 
