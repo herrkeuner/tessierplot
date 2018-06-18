@@ -8,13 +8,13 @@ import json
 from . import view
 
 class parser(object):
-	def __init__(self):
-		self._header = None
-		self._data = None
-	def parse(self):
-		return self._data
-	def parseheader(self):
-		pass
+    def __init__(self):
+        self._header = None        
+        self._data = None
+    def parse(self):
+        return self._data
+    def parseheader(self):
+        pass
 
 class dat_parser(parser):
     def __init__(self,filename=None,filebuffer=None):
