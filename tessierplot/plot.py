@@ -259,6 +259,9 @@ class plotR(object):
 				#or the first since there has been sorting
 				#this doesnt work for e.g. a hilbert measurement
 
+				if x.index[0] > x.index[-1]:
+					sweepoverride = True
+
 				print('xu: {:d}, yu: {:d}, lenz: {:d} after trimming'.format(xu,yu,len(z)))
 				#sorting sorts negative to positive, so beware:
 				#sweep direction determines which part of array should be cut off
@@ -271,7 +274,7 @@ class plotR(object):
 					x = x[:xu*yu]
 					y = y[:xu*yu]
 				
-				XX = np.reshape(z,(xu,yu))
+				XX = z.values.reshape(xu,yu)
 
 				self.x = x
 				self.y = y
@@ -446,7 +449,7 @@ class plotR(object):
 		if not self.fig and not ax_destination:
 			self.fig = plt.figure()
 			self.fig.subplots_adjust(**subplots_args)
-
+		
 			#determine how many subplots we need
 		n_subplots = 1
 		coord_keys = self.data.coordkeys
@@ -492,7 +495,7 @@ class plotR(object):
 		if n_index is not None:
 			n_index = np.array(n_index)
 			n_subplots = len(n_index)
-
+		
 		ax = None
 		for i,j in enumerate(self.data.make_filter_from_uniques_in_columns(uniques_col_str)):
 		
@@ -504,32 +507,35 @@ class plotR(object):
 				#get the columns /not/ corresponding to uniques_cols
 				#find the coord_keys in the header
 				coord_keys = self.data.coordkeys
-
+				
 				#filter out the keys corresponding to unique value columns
 				us=uniques_col_str
 				coord_keys = [key for key in coord_keys if key not in uniques_col_str]
 				#now find out if there are multiple value axes
 				value_keys = self.data.valuekeys
-
+				
 				x=data.loc[:,coord_keys[-1]]
 				y=data.loc[:,value_keys[value_axis]]
-	
+				
 				title =''
 
 				for i,z in enumerate(uniques_col_str):
-					title = '\n'.join([title, '{:s}: {:g}'.format(uniques_axis_designations[i],data[z].iloc[0])])
+					pass
+					# this crashes sometimes. did not investiagte yet what the problem is. switched off in the meantime
+					#title = '\n'.join([title, '{:s}: {:g}'.format(uniques_axis_designations[i],data[z].iloc[0])])
 				
 				wrap = styles.getPopulatedWrap(style)
 				wrap['XX'] = y
 				wrap['X']  = x
 				wrap['massage_func'] = massage_func
 				styles.processStyle(style,wrap)
+				
 				if ax_destination:
 					ax = ax_destination
 				else:
 					ax = plt.subplot(gs[k])
 				ax.plot(wrap['X'],wrap['XX'],label=title,**kwargs)
-
+				
 				if legend:
 					plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
 						   ncol=2, mode="expand", borderaxespad=0.)
