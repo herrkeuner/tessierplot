@@ -302,8 +302,8 @@ class plotR(object):
 						ynew[1] = ylims_manual[1]
 
 				#determine stepsize for di/dv, inprincipe only y step is used (ie. the diff is also taken in this direction and the measurement swept..)
-				xstep = float(xlims[1] - xlims[0])/xu
-				ystep = float(ylims[1] - ylims[0])/yu
+				xstep = float(xlims[1] - xlims[0])/(xu-1)
+				ystep = float(ylims[1] - ylims[0])/(yu-1)
 				
 				ext = xlims+ylims
 				self.extent = ext
